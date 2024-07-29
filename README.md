@@ -1,10 +1,14 @@
-# Welcome to your CDK TypeScript project
+# FormSG on CDK
 
-This is a blank project for CDK development with TypeScript.
+This repository contains templates to roll out FormSG onto an AWS account.
+
+It is written using AWS' Cloud Development Kit (CDK).
+
+## Project details
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
 
-## Useful commands
+### Useful commands
 
 * `npm run build`   compile typescript to js
 * `npm run watch`   watch for changes and compile
