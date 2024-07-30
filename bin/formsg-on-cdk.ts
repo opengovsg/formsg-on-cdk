@@ -4,7 +4,10 @@ import * as cdk from 'aws-cdk-lib';
 import { FormsgOnCdkStack } from '../lib/formsg-on-cdk-stack';
 
 const app = new cdk.App();
-new FormsgOnCdkStack(app, 'form', {
+
+const withHttps = process.env.WITH_HTTPS === 'true'
+
+new FormsgOnCdkStack(app, 'form', withHttps, {
   /* If you don't specify 'env', this stack will be environment-agnostic.
    * Account/Region-dependent features and context lookups will not work,
    * but a single synthesized template can be deployed anywhere. */
