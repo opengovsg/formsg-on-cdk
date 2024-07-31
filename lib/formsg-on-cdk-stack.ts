@@ -1,14 +1,14 @@
-import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
+import * as cdk from 'aws-cdk-lib'
+import { Construct } from 'constructs'
 
-import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import * as ecs from 'aws-cdk-lib/aws-ecs'
+import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns'
+import * as ec2 from 'aws-cdk-lib/aws-ec2'
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
-    super(scope, id, props);
+    super(scope, id, props)
 
     // Input parameters
     const { valueAsString: domainName } = withHttps 
@@ -20,7 +20,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     const vpc = new ec2.Vpc(this, 'vpc', { 
       maxAzs: 2,
-    });
+    })
 
     // Create DocumentDB cluster
     const ddbPassSecret = new Secret(this, 'DocumentDB Password', {
@@ -28,14 +28,14 @@ export class FormsgOnCdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       generateSecretString: {
         excludePunctuation: true,
-        excludeCharacters: "/¥'%:;{}",
+        excludeCharacters: "/¥'%:{}",
       },
-    });
+    })
 
     const dbSecurityGroup = new ec2.SecurityGroup(this, 'ddb-security-group', {
       vpc,
       description: "Allows connection to DocumentDB",
-    });
+    })
 
     const db = new cdk.aws_docdb.DatabaseCluster(this, 'ddb', {
       masterUser: {
@@ -67,10 +67,10 @@ export class FormsgOnCdkStack extends cdk.Stack {
       }),
       securityGroup: dbSecurityGroup,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    })
 
     // Create ECS Cluster and Fargate Service
-    const cluster = new ecs.Cluster(this, 'ecs', { vpc });
+    const cluster = new ecs.Cluster(this, 'ecs', { vpc })
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'app', {
       cluster,
       taskImageOptions: {
@@ -90,19 +90,19 @@ export class FormsgOnCdkStack extends cdk.Stack {
         } 
         : {}
       ),
-    });
+    })
 
-    const scaling = fargate.service.autoScaleTaskCount({ maxCapacity: 2 });
+    const scaling = fargate.service.autoScaleTaskCount({ maxCapacity: 2 })
     scaling.scaleOnCpuUtilization('scaling', {
       targetUtilizationPercent: 50,
       scaleInCooldown: cdk.Duration.seconds(60),
       scaleOutCooldown: cdk.Duration.seconds(60),
-    });
+    })
 
     fargate.service.connections.securityGroups.forEach((securityGroup) => {
-      dbSecurityGroup.addIngressRule(securityGroup, ec2.Port.tcp(27017));
-    });
+      dbSecurityGroup.addIngressRule(securityGroup, ec2.Port.tcp(27017))
+    })
 
-    new cdk.CfnOutput(this, 'LoadBalancerDNS', { value: fargate.loadBalancer.loadBalancerDnsName });
+    new cdk.CfnOutput(this, 'LoadBalancerDNS', { value: fargate.loadBalancer.loadBalancerDnsName })
   }
 }
