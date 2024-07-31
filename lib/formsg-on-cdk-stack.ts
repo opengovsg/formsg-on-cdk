@@ -4,7 +4,7 @@ import { Construct } from 'constructs';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
@@ -18,17 +18,66 @@ export class FormsgOnCdkStack extends cdk.Stack {
       })
       : { valueAsString: '' }
 
-    // ECS cluster
-    const vpc = new ec2.Vpc(this, 'vpc', { maxAzs: 2 });
+    const vpc = new ec2.Vpc(this, 'vpc', { 
+      maxAzs: 2,
+    });
 
+    // Create DocumentDB cluster
+    const ddbPassSecret = new Secret(this, 'DocumentDB Password', {
+      secretName: 'ddb-password',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      generateSecretString: {
+        excludePunctuation: true,
+        excludeCharacters: "/¥'%:;{}",
+      },
+    });
+
+    const dbSecurityGroup = new ec2.SecurityGroup(this, 'ddb-security-group', {
+      vpc,
+      description: "Allows connection to DocumentDB",
+    });
+
+    const db = new cdk.aws_docdb.DatabaseCluster(this, 'ddb', {
+      masterUser: {
+        username: 'root',
+        password: cdk.SecretValue.secretsManager(ddbPassSecret.secretArn),
+      },
+      vpc,
+      vpcSubnets: {
+        subnets: vpc.availabilityZones.map((availabilityZone, index) => {
+          return new ec2.PrivateSubnet(this, `ddb-subnet-${index}`, {
+            availabilityZone,
+            vpcId: vpc.vpcId,
+            cidrBlock: `10.1.${(index + 1) * 64}.0/18`,
+          })
+        })
+      },
+      // Use t3 medium instances to take advantage of the free tier,
+      // providing 750 machine hours free per month
+      // See https://aws.amazon.com/documentdb/free-trial/
+      instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MEDIUM),
+      instances: 2,
+      engineVersion: '4.0',
+      parameterGroup: new cdk.aws_docdb.ClusterParameterGroup(this, 'DDB_Parameter', {
+        dbClusterParameterGroupName: 'disabled-tls-parameter2',
+        parameters: {
+          tls: 'disabled',
+        },
+        family: 'docdb4.0',
+      }),
+      securityGroup: dbSecurityGroup,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Create ECS Cluster and Fargate Service
     const cluster = new ecs.Cluster(this, 'ecs', { vpc });
-
-    // Create Fargate Service
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'app', {
       cluster,
       taskImageOptions: {
-        image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample')
+        image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
       },
+      // TODO: Configure task definition, injecting document db details
+      // taskDefinition: 
       publicLoadBalancer: true,
       ...(withHttps 
         ? {
@@ -48,6 +97,10 @@ export class FormsgOnCdkStack extends cdk.Stack {
       targetUtilizationPercent: 50,
       scaleInCooldown: cdk.Duration.seconds(60),
       scaleOutCooldown: cdk.Duration.seconds(60),
+    });
+
+    fargate.service.connections.securityGroups.forEach((securityGroup) => {
+      dbSecurityGroup.addIngressRule(securityGroup, ec2.Port.tcp(27017));
     });
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', { value: fargate.loadBalancer.loadBalancerDnsName });
