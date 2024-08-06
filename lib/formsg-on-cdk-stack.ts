@@ -8,6 +8,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
 import { BlockPublicAccess, ObjectOwnership } from 'aws-cdk-lib/aws-s3'
 import { FormsgS3Buckets } from './constructs/s3'
+import { FormsgLambdas } from './constructs/lambdas'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
@@ -29,6 +30,9 @@ export class FormsgOnCdkStack extends cdk.Stack {
     const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 6)
     const s3Suffix = nanoid()
     const s3Buckets = new FormsgS3Buckets(this, s3Suffix)
+
+    // Create Lambda Virus Scanner
+    const lambdas = new FormsgLambdas(this, { s3Buckets })
 
     // Create DocumentDB cluster
     const ddbPassSecret = new Secret(this, 'DocumentDB Password', {
