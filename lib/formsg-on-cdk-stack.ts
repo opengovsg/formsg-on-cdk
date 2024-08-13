@@ -58,15 +58,15 @@ export class FormsgOnCdkStack extends cdk.Stack {
         password: cdk.SecretValue.secretsManager(ddbPassSecret.secretArn),
       },
       vpc,
-      vpcSubnets: {
-        subnets: vpc.availabilityZones.map((availabilityZone, index) => {
-          return new ec2.PrivateSubnet(this, `ddb-subnet-${index}`, {
-            availabilityZone,
-            vpcId: vpc.vpcId,
-            cidrBlock: `10.0.${2 + index}.0/24`,
-          })
-        })
-      },
+      // vpcSubnets: {
+      //   subnets: vpc.availabilityZones.map((availabilityZone, index) => {
+      //     return new ec2.PrivateSubnet(this, `ddb-subnet-${index}`, {
+      //       availabilityZone,
+      //       vpcId: vpc.vpcId,
+      //       cidrBlock: `10.0.${37 + index}.0/24`,
+      //     })
+      //   })
+      // },
       // Use t3 medium instances to take advantage of the free tier,
       // providing 750 machine hours free per month
       // See https://aws.amazon.com/documentdb/free-trial/
