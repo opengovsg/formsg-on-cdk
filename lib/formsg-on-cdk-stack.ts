@@ -11,6 +11,7 @@ import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
 import { FormsgS3Buckets } from './constructs/s3'
 import { FormsgEcr } from './constructs/ecr'
 import defaultEnvironment from './formsg-env-vars'
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
@@ -97,7 +98,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
         secretName: 'ddb-connstring',
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         secretStringValue: cdk.SecretValue.unsafePlainText(
-          `mongodb://root:${ddbPassSecret.secretValue.unsafeUnwrap()}@${db.clusterEndpoint.socketAddress}/form`
+          `mongodb://root:${ddbPassSecret.secretValue.unsafeUnwrap()}@${db.clusterEndpoint.socketAddress}/form?replicaSet=rs0&readPreference=secondaryPreferred&retryWrites=false`
         ),
       })
     )
@@ -157,6 +158,52 @@ export class FormsgOnCdkStack extends cdk.Stack {
     fargate.service.connections.securityGroups.forEach((securityGroup) => {
       dbSecurityGroup.addIngressRule(securityGroup, ec2.Port.tcp(27017))
     })
+
+    ;[
+      s3Buckets.s3Attachment,
+      s3Buckets.s3Image,
+      s3Buckets.s3Logo,
+    ].forEach(({ bucketArn }) => 
+      fargate.taskDefinition.addToTaskRolePolicy(
+        new PolicyStatement({
+          actions: [
+            's3:PutObject',
+            's3:GetObject',
+            's3:DeleteObject',
+            's3:PutObjectAcl',
+          ],
+          resources: [bucketArn],
+        })
+      )
+    )
+
+    fargate.taskDefinition.addToTaskRolePolicy(
+      new PolicyStatement({
+        actions: [
+          's3:PutObject',
+          's3:GetObject',
+        ],
+        resources: [s3Buckets.s3PaymentProof.bucketArn],
+      })
+    )
+
+    fargate.taskDefinition.addToTaskRolePolicy(
+      new PolicyStatement({
+        actions: [
+          's3:PutObject',
+        ],
+        resources: [s3Buckets.s3VirusScannerQuarantine.bucketArn],
+      })
+    )
+
+    fargate.taskDefinition.addToTaskRolePolicy(
+      new PolicyStatement({
+        actions: [
+          's3:GetObjectVersion',
+        ],
+        resources: [s3Buckets.s3VirusScannerClean.bucketArn],
+      })
+    )
 
     new cdk.CfnOutput(this, 'LoadBalancerDNS', { value: fargate.loadBalancer.loadBalancerDnsName })
   }
