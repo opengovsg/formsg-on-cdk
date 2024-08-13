@@ -1,12 +1,14 @@
 
 import { Duration } from 'aws-cdk-lib'
-import { Policy, PolicyDocument, PolicyStatement, Role } from 'aws-cdk-lib/aws-iam'
+import { Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam'
 import { Code, Function, Handler, Runtime } from 'aws-cdk-lib/aws-lambda'
 import { Construct } from 'constructs'
 import { FormsgS3Buckets } from './s3'
+import { FormsgEcr } from './ecr'
 
 export interface FormsgLambdasProps {
   s3Buckets: FormsgS3Buckets
+  ecr: FormsgEcr
 }
 
 export class FormsgLambdas extends Construct {
@@ -16,8 +18,11 @@ export class FormsgLambdas extends Construct {
     { 
       s3Buckets: { 
         s3VirusScannerClean, 
-        s3VirusScannerQuarantine 
+        s3VirusScannerQuarantine,
       },
+      ecr: {
+        lambdaVirusScanner,
+      }
     }: FormsgLambdasProps
   ) {
     super(scope, 'lambdas')
@@ -25,12 +30,9 @@ export class FormsgLambdas extends Construct {
       functionName: 'virus-scanner',
       timeout: Duration.seconds(300),
       memorySize: 2048,
-      // runtime: Runtime.FROM_IMAGE,
-      // handler: Handler.FROM_IMAGE,
-      // code: Code.fromEcrImage(),
-      runtime: Runtime.NODEJS_LATEST,
-      handler: 'handler',
-      code: Code.fromInline('module.exports = { handler: () => {} }')
+      runtime: Runtime.FROM_IMAGE,
+      handler: Handler.FROM_IMAGE,
+      code: Code.fromEcrImage(lambdaVirusScanner),
     })
     virusScanner.role?.attachInlinePolicy(new Policy(scope, 'manage-quarantine', {
       statements: [

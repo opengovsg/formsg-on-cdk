@@ -6,9 +6,9 @@ import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
-import { BlockPublicAccess, ObjectOwnership } from 'aws-cdk-lib/aws-s3'
 import { FormsgS3Buckets } from './constructs/s3'
 import { FormsgLambdas } from './constructs/lambdas'
+import { FormsgEcr } from './constructs/ecr'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
@@ -26,13 +26,16 @@ export class FormsgOnCdkStack extends cdk.Stack {
       maxAzs: 2,
     })
 
+    // Create ECR
+    const ecr = new FormsgEcr(this)
+
     // Create S3 buckets
     const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 6)
     const s3Suffix = nanoid()
     const s3Buckets = new FormsgS3Buckets(this, s3Suffix)
 
     // Create Lambda Virus Scanner
-    const lambdas = new FormsgLambdas(this, { s3Buckets })
+    const lambdas = new FormsgLambdas(this, { s3Buckets, ecr })
 
     // Create DocumentDB cluster
     const ddbPassSecret = new Secret(this, 'DocumentDB Password', {
@@ -46,7 +49,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     const dbSecurityGroup = new ec2.SecurityGroup(this, 'ddb-security-group', {
       vpc,
-      description: "Allows connection to DocumentDB",
+      description: 'Allows connection to DocumentDB',
     })
 
     const db = new cdk.aws_docdb.DatabaseCluster(this, 'ddb', {
