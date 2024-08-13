@@ -47,7 +47,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
     // const lambdas = new FormsgLambdas(this, { s3Buckets, ecr })
 
     // Create DocumentDB cluster
-    const ddbPassSecret = new Secret(this, 'DocumentDB Password', {
+    const ddbPassSecret = new Secret(this, 'ddb-password', {
       secretName: 'ddb-password',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       generateSecretString: {
@@ -67,22 +67,13 @@ export class FormsgOnCdkStack extends cdk.Stack {
         password: cdk.SecretValue.secretsManager(ddbPassSecret.secretArn),
       },
       vpc,
-      // vpcSubnets: {
-      //   subnets: vpc.availabilityZones.map((availabilityZone, index) => {
-      //     return new ec2.PrivateSubnet(this, `ddb-subnet-${index}`, {
-      //       availabilityZone,
-      //       vpcId: vpc.vpcId,
-      //       cidrBlock: `10.0.${37 + index}.0/24`,
-      //     })
-      //   })
-      // },
       // Use t3 medium instances to take advantage of the free tier,
       // providing 750 machine hours free per month
       // See https://aws.amazon.com/documentdb/free-trial/
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MEDIUM),
       instances: 2,
       engineVersion: '4.0',
-      parameterGroup: new cdk.aws_docdb.ClusterParameterGroup(this, 'DDB_Parameter', {
+      parameterGroup: new cdk.aws_docdb.ClusterParameterGroup(this, 'ddb-parameter-group', {
         dbClusterParameterGroupName: 'disabled-tls-parameter2',
         parameters: {
           tls: 'disabled',
@@ -94,7 +85,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
     })
 
     const dbHostString = ecs.Secret.fromSecretsManager(
-      new Secret(this, 'DocumentDB Connection String', {
+      new Secret(this, 'ddb-connstring', {
         secretName: 'ddb-connstring',
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         secretStringValue: cdk.SecretValue.unsafePlainText(
@@ -104,6 +95,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
     )
 
     const loadBalancer = new ApplicationLoadBalancer(this, 'alb', {
+      loadBalancerName: 'form-alb',
       vpc,
       vpcSubnets: {
         subnets: vpc.publicSubnets,
@@ -205,6 +197,6 @@ export class FormsgOnCdkStack extends cdk.Stack {
       })
     )
 
-    new cdk.CfnOutput(this, 'LoadBalancerDNS', { value: fargate.loadBalancer.loadBalancerDnsName })
+    new cdk.CfnOutput(this, 'alb-dns', { value: fargate.loadBalancer.loadBalancerDnsName })
   }
 }
