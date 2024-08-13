@@ -34,8 +34,9 @@ export class FormsgOnCdkStack extends cdk.Stack {
     const s3Suffix = nanoid()
     const s3Buckets = new FormsgS3Buckets(this, s3Suffix)
 
-    // Create Lambda Virus Scanner
-    const lambdas = new FormsgLambdas(this, { s3Buckets, ecr })
+    // Do not create Lambda Virus Scanner for now, until we figure out
+    // how to load the ECR image for this deployment
+    // const lambdas = new FormsgLambdas(this, { s3Buckets, ecr })
 
     // Create DocumentDB cluster
     const ddbPassSecret = new Secret(this, 'DocumentDB Password', {

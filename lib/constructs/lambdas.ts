@@ -32,7 +32,11 @@ export class FormsgLambdas extends Construct {
       memorySize: 2048,
       runtime: Runtime.FROM_IMAGE,
       handler: Handler.FROM_IMAGE,
-      code: Code.fromEcrImage(lambdaVirusScanner),
+      code: Code.fromEcrImage(lambdaVirusScanner.repository),
+      environment: {
+        VIRUS_SCANNER_QUARANTINE_S3_BUCKET: s3VirusScannerQuarantine.bucketName,
+        VIRUS_SCANNER_CLEAN_S3_BUCKET: s3VirusScannerClean.bucketName,
+      }
     })
     virusScanner.role?.attachInlinePolicy(new Policy(scope, 'manage-quarantine', {
       statements: [
