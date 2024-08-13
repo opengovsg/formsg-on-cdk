@@ -63,7 +63,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
           return new ec2.PrivateSubnet(this, `ddb-subnet-${index}`, {
             availabilityZone,
             vpcId: vpc.vpcId,
-            cidrBlock: `10.1.${(index + 1) * 64}.0/18`,
+            cidrBlock: `10.0.${2 + index}.0/24`,
           })
         })
       },
