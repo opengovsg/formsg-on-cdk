@@ -5,10 +5,12 @@ import { customAlphabet } from 'nanoid'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
+import { ApplicationLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
+
 import { FormsgS3Buckets } from './constructs/s3'
-import { FormsgLambdas } from './constructs/lambdas'
 import { FormsgEcr } from './constructs/ecr'
+import defaultEnvironment from './formsg-env-vars'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
@@ -24,6 +26,11 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     const vpc = new ec2.Vpc(this, 'vpc', { 
       maxAzs: 2,
+      // Deliberately avoid restricting default security group,
+      // so that we avoid creating the custom resource that
+      // is invoked when deploying directly in CDK, but
+      // does not work well as a synth'd CloudFormation
+      restrictDefaultSecurityGroup: false,
     })
 
     // Create ECR
@@ -85,15 +92,47 @@ export class FormsgOnCdkStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     })
 
+    const dbHostString = ecs.Secret.fromSecretsManager(
+      new Secret(this, 'DocumentDB Connection String', {
+        secretName: 'ddb-connstring',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        secretStringValue: cdk.SecretValue.unsafePlainText(
+          `mongodb://root:${ddbPassSecret.secretValue.unsafeUnwrap()}@${db.clusterEndpoint.socketAddress}/form`
+        ),
+      })
+    )
+
+    const loadBalancer = new ApplicationLoadBalancer(this, 'alb', {
+      vpc,
+      vpcSubnets: {
+        subnets: vpc.publicSubnets,
+      },
+      internetFacing: true,
+    })
+    const environment = domainName
+      ? {
+        ...defaultEnvironment,
+        APP_URL: `https://${domainName}`,
+        FE_APP_URL: `https://${domainName}`,
+      }
+      : {
+        ...defaultEnvironment,
+        APP_URL: `http://${loadBalancer.loadBalancerDnsName}`,
+        FE_APP_URL: `http://${loadBalancer.loadBalancerDnsName}`,
+      }
+
     // Create ECS Cluster and Fargate Service
     const cluster = new ecs.Cluster(this, 'ecs', { vpc })
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'app', {
       cluster,
       taskImageOptions: {
         image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
+        environment,
+        secrets: {
+          DB_HOST: dbHostString,
+        }
       },
-      // TODO: Configure task definition, injecting document db details
-      // taskDefinition: 
+      loadBalancer,
       publicLoadBalancer: true,
       ...(withHttps 
         ? {
