@@ -5,25 +5,27 @@ import { customAlphabet } from 'nanoid'
 import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
-import { ApplicationLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
+import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
+import { AllowedMethods, CacheCookieBehavior, CacheHeaderBehavior, CachePolicy, CacheQueryStringBehavior, Distribution, OriginProtocolPolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront'
+import { LoadBalancerV2Origin } from 'aws-cdk-lib/aws-cloudfront-origins'
 
 import { FormsgS3Buckets } from './constructs/s3'
 import { FormsgEcr } from './constructs/ecr'
 import defaultEnvironment from './formsg-env-vars'
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
     super(scope, id, props)
 
     // Input parameters
-    const { valueAsString: domainName } = withHttps 
-      ? new cdk.CfnParameter(this, 'domainName', {
-        type: 'String',
-        description: 'The fully-qualified domain name (FQDN) that identifies this service.',
-      })
-      : { valueAsString: '' }
+    // const { valueAsString: domainName } = withHttps 
+    //   ? new cdk.CfnParameter(this, 'domainName', {
+    //     type: 'String',
+    //     description: 'The fully-qualified domain name (FQDN) that identifies this service.',
+    //   })
+    //   : { valueAsString: '' }
 
     const { valueAsString: email } = new cdk.CfnParameter(this, 'email', {
       type: 'String',
@@ -33,13 +35,13 @@ export class FormsgOnCdkStack extends cdk.Stack {
       type: 'String',
       description: 'The fully-qualified domain name (FQDN) of the initial agency.',
     })
-    const { valueAsString: initAgencyName } = new cdk.CfnParameter(this, 'initAgencyName', {
+    const { valueAsString: initAgencyFullName } = new cdk.CfnParameter(this, 'initAgencyFullName', {
       type: 'String',
-      description: 'The name of the initial agency.',
+      description: 'The full name of the initial agency.',
     })
     const { valueAsString: initAgencyShortname } = new cdk.CfnParameter(this, 'initAgencyShortname', {
       type: 'String',
-      description: 'The short name of the initial agency.',
+      description: 'The shortname of the initial agency.',
     })
 
 
@@ -146,36 +148,41 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     const loadBalancer = new ApplicationLoadBalancer(this, 'alb', {
       loadBalancerName: 'form-alb',
+      internetFacing: true,
       vpc,
       vpcSubnets: {
         subnets: vpc.publicSubnets,
       },
-      internetFacing: true,
     })
+
+    const origin = new LoadBalancerV2Origin(loadBalancer, {
+      protocolPolicy: OriginProtocolPolicy.HTTP_ONLY,
+    })
+    const cloudFront = new Distribution(this, 'cloudfront-form', {
+      defaultBehavior: {
+        origin,
+        originRequestPolicy: OriginRequestPolicy.ALL_VIEWER,
+        allowedMethods: AllowedMethods.ALLOW_ALL,
+      },
+    })
+    cloudFront.addBehavior('api/*', origin, {
+      cachePolicy: CachePolicy.CACHING_DISABLED,
+      originRequestPolicy: OriginRequestPolicy.ALL_VIEWER,
+      allowedMethods: AllowedMethods.ALLOW_ALL,
+    })
+
     // TODO: Add secrets, parameters for initial agency domain/name
-    const environment = domainName
-      ? {
-        ...defaultEnvironment,
-        APP_URL: `https://${domainName}`,
-        FE_APP_URL: `https://${domainName}`,
-        MAIL_FROM: email,
-        MAIL_OFFICIAL: email,
-        SES_HOST: sesHost,
-        INIT_AGENCY_DOMAIN: initAgencyDomain,
-        INIT_AGENCY_NAME: initAgencyName,
-        INIT_AGENCY_SHORTNAME: initAgencyShortname,
-      }
-      : {
-        ...defaultEnvironment,
-        APP_URL: `http://${loadBalancer.loadBalancerDnsName}`,
-        FE_APP_URL: `http://${loadBalancer.loadBalancerDnsName}`,
-        MAIL_FROM: email,
-        MAIL_OFFICIAL: email,
-        SES_HOST: sesHost,
-        INIT_AGENCY_DOMAIN: initAgencyDomain,
-        INIT_AGENCY_NAME: initAgencyName,
-        INIT_AGENCY_SHORTNAME: initAgencyShortname,
-      }
+    const environment = {
+      ...defaultEnvironment,
+      APP_URL: `https://${cloudFront.distributionDomainName}`,
+      FE_APP_URL: `https://${cloudFront.distributionDomainName}`,
+      MAIL_FROM: email,
+      MAIL_OFFICIAL: email,
+      SES_HOST: sesHost,
+      INIT_AGENCY_DOMAIN: initAgencyDomain,
+      INIT_AGENCY_FULLNAME: initAgencyFullName,
+      INIT_AGENCY_SHORTNAME: initAgencyShortname,
+    }
 
     // Create Session Secret
     const sessionSecret = ecs.Secret.fromSecretsManager(
@@ -205,18 +212,6 @@ export class FormsgOnCdkStack extends cdk.Stack {
         containerPort: 5000,
       },
       loadBalancer,
-      publicLoadBalancer: true,
-      ...(withHttps 
-        ? {
-          redirectHTTP: true,
-          protocol: cdk.aws_elasticloadbalancingv2.ApplicationProtocol.HTTPS,
-          domainName,
-          domainZone: new cdk.aws_route53.HostedZone(this, 'hosted-zone', {
-            zoneName: domainName,
-          }),
-        } 
-        : {}
-      ),
     })
 
     const scaling = fargate.service.autoScaleTaskCount({ maxCapacity: 2 })
@@ -276,6 +271,6 @@ export class FormsgOnCdkStack extends cdk.Stack {
       })
     )
 
-    new cdk.CfnOutput(this, 'alb-dns', { value: fargate.loadBalancer.loadBalancerDnsName })
+    new cdk.CfnOutput(this, 'url', { value: cloudFront.distributionDomainName })
   }
 }
