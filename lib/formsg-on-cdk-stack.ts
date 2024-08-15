@@ -25,6 +25,40 @@ export class FormsgOnCdkStack extends cdk.Stack {
       })
       : { valueAsString: '' }
 
+    const { valueAsString: email } = new cdk.CfnParameter(this, 'email', {
+      type: 'String',
+      description: 'Your email address. OTP emails will be sent bearing this email address.',
+    })
+    const { valueAsString: initAgencyDomain } = new cdk.CfnParameter(this, 'initAgencyDomain', {
+      type: 'String',
+      description: 'The fully-qualified domain name (FQDN) of the initial agency.',
+    })
+    const { valueAsString: initAgencyName } = new cdk.CfnParameter(this, 'initAgencyName', {
+      type: 'String',
+      description: 'The name of the initial agency.',
+    })
+    const { valueAsString: initAgencyShortname } = new cdk.CfnParameter(this, 'initAgencyShortname', {
+      type: 'String',
+      description: 'The short name of the initial agency.',
+    })
+
+
+    const { valueAsString: sesHost } = new cdk.CfnParameter(this, 'sesHost', {
+      type: 'String',
+      default: 'email-smtp.ap-southeast-1.amazonaws.com',
+      description: 'The fully-qualified domain name (FQDN) of the SMTP host, or for Simple Email Service (SES).',
+    })
+    const { valueAsString: sesUser } = new cdk.CfnParameter(this, 'sesUser', {
+      noEcho: true,
+      type: 'String',
+      description: 'The SMTP user for Simple Email Service (SES).',
+    })
+    const { valueAsString: sesPass } = new cdk.CfnParameter(this, 'sesPass', {
+      noEcho: true,
+      type: 'String',
+      description: 'The SMTP password for Simple Email Service (SES).',
+    })
+
     const vpc = new ec2.Vpc(this, 'vpc', { 
       maxAzs: 2,
       // Deliberately avoid restricting default security group,
@@ -94,6 +128,22 @@ export class FormsgOnCdkStack extends cdk.Stack {
       })
     )
 
+    const sesUserSecret = ecs.Secret.fromSecretsManager(
+      new Secret(this, 'ses-user', {
+        secretName: 'ses-user',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        secretStringValue: cdk.SecretValue.unsafePlainText(sesUser),
+      })
+    )
+
+    const sesPassSecret = ecs.Secret.fromSecretsManager(
+      new Secret(this, 'ses-pass', {
+        secretName: 'ses-pass',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        secretStringValue: cdk.SecretValue.unsafePlainText(sesPass),
+      })
+    )
+
     const loadBalancer = new ApplicationLoadBalancer(this, 'alb', {
       loadBalancerName: 'form-alb',
       vpc,
@@ -102,28 +152,57 @@ export class FormsgOnCdkStack extends cdk.Stack {
       },
       internetFacing: true,
     })
+    // TODO: Add secrets, parameters for initial agency domain/name
     const environment = domainName
       ? {
         ...defaultEnvironment,
         APP_URL: `https://${domainName}`,
         FE_APP_URL: `https://${domainName}`,
+        MAIL_FROM: email,
+        MAIL_OFFICIAL: email,
+        SES_HOST: sesHost,
+        INIT_AGENCY_DOMAIN: initAgencyDomain,
+        INIT_AGENCY_NAME: initAgencyName,
+        INIT_AGENCY_SHORTNAME: initAgencyShortname,
       }
       : {
         ...defaultEnvironment,
         APP_URL: `http://${loadBalancer.loadBalancerDnsName}`,
         FE_APP_URL: `http://${loadBalancer.loadBalancerDnsName}`,
+        MAIL_FROM: email,
+        MAIL_OFFICIAL: email,
+        SES_HOST: sesHost,
+        INIT_AGENCY_DOMAIN: initAgencyDomain,
+        INIT_AGENCY_NAME: initAgencyName,
+        INIT_AGENCY_SHORTNAME: initAgencyShortname,
       }
+
+    // Create Session Secret
+    const sessionSecret = ecs.Secret.fromSecretsManager(
+      new Secret(this, 'session-secret', {
+        secretName: 'session-secret',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        generateSecretString: {
+          excludePunctuation: true,
+          excludeCharacters: "/¥'%:{}",
+        },
+      })
+    )
 
     // Create ECS Cluster and Fargate Service
     const cluster = new ecs.Cluster(this, 'ecs', { vpc })
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'app', {
       cluster,
       taskImageOptions: {
-        image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
+        image: ecs.ContainerImage.fromRegistry('opengovsg/formsg-intl'),
         environment,
         secrets: {
           DB_HOST: dbHostString,
-        }
+          SESSION_SECRET: sessionSecret,
+          SES_USER: sesUserSecret,
+          SES_PASS: sesPassSecret,
+        },
+        containerPort: 5000,
       },
       loadBalancer,
       publicLoadBalancer: true,

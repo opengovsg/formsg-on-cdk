@@ -20,6 +20,8 @@ export default {
   SENTRY_CONFIG_URL: 'https://random@sentry.io/123456',
   CSP_REPORT_URI: 'https://random@sentry.io/123456',
 
+  SES_PORT: '465',
+
   // Test credentials from reCAPTCHA docs
   // https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
   GOOGLE_CAPTCHA: '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe',
