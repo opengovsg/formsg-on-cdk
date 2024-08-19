@@ -176,7 +176,6 @@ export class FormsgOnCdkStack extends cdk.Stack {
       allowedMethods: AllowedMethods.ALLOW_ALL,
     })
 
-    // TODO: Add secrets, parameters for initial agency domain/name
     const environment = {
       ...defaultEnvironment,
       APP_URL: `https://${cloudFront.distributionDomainName}`,
@@ -188,6 +187,14 @@ export class FormsgOnCdkStack extends cdk.Stack {
       INIT_AGENCY_DOMAIN: initAgencyDomain,
       INIT_AGENCY_FULLNAME: initAgencyFullName,
       INIT_AGENCY_SHORTNAME: initAgencyShortname,
+      // S3 Bucket config
+      ATTACHMENT_S3_BUCKET: s3Buckets.s3Attachment.bucketName,
+      PAYMENT_PROOF_S3_BUCKET: s3Buckets.s3PaymentProof.bucketName,
+      IMAGE_S3_BUCKET: s3Buckets.s3Image.bucketName,
+      LOGO_S3_BUCKET: s3Buckets.s3Logo.bucketName,
+      STATIC_ASSETS_S3_BUCKET: s3Buckets.s3StaticAssets.bucketName,
+      VIRUS_SCANNER_QUARANTINE_S3_BUCKET: s3Buckets.s3VirusScannerQuarantine.bucketName,
+      VIRUS_SCANNER_CLEAN_S3_BUCKET: s3Buckets.s3VirusScannerClean.bucketName,
     }
 
     // Create Session Secret
