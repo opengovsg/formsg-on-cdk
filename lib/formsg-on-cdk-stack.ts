@@ -14,6 +14,7 @@ import { LoadBalancerV2Origin } from 'aws-cdk-lib/aws-cloudfront-origins'
 import { FormsgS3Buckets } from './constructs/s3'
 import { FormsgEcr } from './constructs/ecr'
 import defaultEnvironment from './formsg-env-vars'
+import { LogGroup } from 'aws-cdk-lib/aws-logs'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
@@ -77,11 +78,6 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     // Create ECR
     const ecr = new FormsgEcr(this)
-
-    // Create S3 buckets
-    const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 6)
-    const s3Suffix = nanoid()
-    const s3Buckets = new FormsgS3Buckets(this, s3Suffix)
 
     // Do not create Lambda Virus Scanner for now, until we figure out
     // how to load the ECR image for this deployment
@@ -162,6 +158,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     const origin = new LoadBalancerV2Origin(loadBalancer, {
       protocolPolicy: OriginProtocolPolicy.HTTP_ONLY,
+      originShieldEnabled: true,
     })
     const cloudFront = new Distribution(this, 'cloudfront-form', {
       defaultBehavior: {
@@ -176,10 +173,17 @@ export class FormsgOnCdkStack extends cdk.Stack {
       allowedMethods: AllowedMethods.ALLOW_ALL,
     })
 
+    const distributionUrl = `https://${cloudFront.distributionDomainName}`
+
+    // Create S3 buckets
+    const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 6)
+    const s3Suffix = nanoid()
+    const s3Buckets = new FormsgS3Buckets(this, { s3Suffix, origin: distributionUrl })
+
     const environment = {
       ...defaultEnvironment,
-      APP_URL: `https://${cloudFront.distributionDomainName}`,
-      FE_APP_URL: `https://${cloudFront.distributionDomainName}`,
+      APP_URL: distributionUrl,
+      FE_APP_URL: distributionUrl,
       MAIL_FROM: email,
       MAIL_OFFICIAL: email,
       SES_HOST: sesHost,
@@ -210,6 +214,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
     )
 
     // Create ECS Cluster and Fargate Service
+    const logGroupSuffix = s3Suffix
     const cluster = new ecs.Cluster(this, 'ecs', { vpc })
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'app', {
       cluster,
@@ -222,6 +227,12 @@ export class FormsgOnCdkStack extends cdk.Stack {
           SES_USER: sesUserSecret,
           SES_PASS: sesPassSecret,
         },
+        logDriver: ecs.LogDriver.awsLogs({
+          logGroup: new LogGroup(this, 'cloudwatch', {
+            logGroupName: `/aws/ecs/logs/form/${logGroupSuffix}`,
+          }),
+          streamPrefix: 'form',
+        }),
         containerPort: 5000,
       },
       loadBalancer,
