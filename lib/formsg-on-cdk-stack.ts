@@ -108,7 +108,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
       // providing 750 machine hours free per month
       // See https://aws.amazon.com/documentdb/free-trial/
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MEDIUM),
-      instances: 1,
+      instances: 2,
       engineVersion: '4.0',
       parameterGroup: new cdk.aws_docdb.ClusterParameterGroup(this, 'ddb-parameter-group', {
         dbClusterParameterGroupName: 'disabled-tls-parameter2',
@@ -126,7 +126,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
         secretName: 'ddb-connstring',
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         secretStringValue: cdk.SecretValue.unsafePlainText(
-          `mongodb://root:${ddbPassSecret.secretValue.unsafeUnwrap()}@${db.clusterEndpoint.socketAddress}/form?replicaSet=rs0&retryWrites=false`
+          `mongodb://root:${ddbPassSecret.secretValue.unsafeUnwrap()}@${db.clusterEndpoint.socketAddress}/form?replicaSet=rs0&readPreference=primaryPreferred&retryWrites=false`
         ),
       })
     )
