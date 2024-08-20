@@ -24,7 +24,6 @@
     "aws-cdk-lib": "^2.147.1",
     "cdk-ecr-deployment": "^3.0.80",
     "constructs": "^10.0.0",
-    "nanoid": "^3.3.7",
     "source-map-support": "^0.5.21"
   }
 }

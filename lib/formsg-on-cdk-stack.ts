@@ -1,14 +1,13 @@
 import * as cdk from 'aws-cdk-lib'
 import { Construct } from 'constructs'
-import { customAlphabet } from 'nanoid'
 
 import * as ecs from 'aws-cdk-lib/aws-ecs'
 import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
-import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
+import { ApplicationLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
-import { AllowedMethods, CacheCookieBehavior, CacheHeaderBehavior, CachePolicy, CacheQueryStringBehavior, Distribution, OriginProtocolPolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront'
+import { AllowedMethods, CachePolicy, Distribution, OriginProtocolPolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront'
 import { LoadBalancerV2Origin } from 'aws-cdk-lib/aws-cloudfront-origins'
 
 import { FormsgS3Buckets } from './constructs/s3'
@@ -176,8 +175,18 @@ export class FormsgOnCdkStack extends cdk.Stack {
     const distributionUrl = `https://${cloudFront.distributionDomainName}`
 
     // Create S3 buckets
-    const nanoid = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 6)
-    const s3Suffix = nanoid()
+    const s3SuffixSecret = new Secret(this, 's3-suffix-secret', {
+      secretName: 's3-suffix-secret',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      generateSecretString: {
+        excludePunctuation: true,
+        excludeUppercase: true,
+        excludeCharacters: "/¥'%:{}-_[]()",
+        passwordLength: 6,
+      },
+    })
+
+    const s3Suffix = s3SuffixSecret.secretValue.unsafeUnwrap()
     const s3Buckets = new FormsgS3Buckets(this, { s3Suffix, origin: distributionUrl })
 
     const environment = {
