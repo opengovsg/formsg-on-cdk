@@ -21,8 +21,8 @@ export default {
   CSP_REPORT_URI: 'https://random@sentry.io/123456',
 
   // Test credentials from reCAPTCHA docs
-  // https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
-  GOOGLE_CAPTCHA: '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe',
+  // GOOGLE_CAPTCHA is injected as secret. Left here commented out for completeness.
+  // GOOGLE_CAPTCHA: '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe',
   GOOGLE_CAPTCHA_PUBLIC: '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI',
 
   // Keep in sync with the development key in

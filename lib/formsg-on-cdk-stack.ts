@@ -20,12 +20,22 @@ export class FormsgOnCdkStack extends cdk.Stack {
     super(scope, id, props)
 
     // Input parameters
-    // const { valueAsString: domainName } = withHttps 
-    //   ? new cdk.CfnParameter(this, 'domainName', {
-    //     type: 'String',
-    //     description: 'The fully-qualified domain name (FQDN) that identifies this service.',
-    //   })
-    //   : { valueAsString: '' }
+    const { valueAsString: googleCaptcha } = new cdk.CfnParameter(this, 'googleCaptcha', {
+      noEcho: true,
+      type: 'String',
+      description: 'The secret key used for reCAPTCHA.',
+      // Okay to hard-code the default here, since this is 
+      // the key published by Google for dev testing
+      // https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
+      default: '6LeIxAcTAAAAAGG-vFI1TnRWxMZNFuojJ4WifJWe',
+    })
+
+    const { valueAsString: googleCaptchaPublic } = new cdk.CfnParameter(this, 'googleCaptchaPublic', {
+      type: 'String',
+      description: 'The public key used for reCAPTCHA.',
+      // https://developers.google.com/recaptcha/docs/faq#id-like-to-run-automated-tests-with-recaptcha.-what-should-i-do
+      default: '6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI',
+    })
 
     const { valueAsString: email } = new cdk.CfnParameter(this, 'email', {
       type: 'String',
@@ -130,6 +140,14 @@ export class FormsgOnCdkStack extends cdk.Stack {
       })
     )
 
+    const googleCaptchaSecret = ecs.Secret.fromSecretsManager(
+      new Secret(this, 'google-captcha', {
+        secretName: 'google-captcha',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        secretStringValue: cdk.SecretValue.unsafePlainText(googleCaptcha),
+      })
+    )
+
     const sesUserSecret = ecs.Secret.fromSecretsManager(
       new Secret(this, 'ses-user', {
         secretName: 'ses-user',
@@ -200,6 +218,9 @@ export class FormsgOnCdkStack extends cdk.Stack {
       INIT_AGENCY_DOMAIN: initAgencyDomain,
       INIT_AGENCY_FULLNAME: initAgencyFullName,
       INIT_AGENCY_SHORTNAME: initAgencyShortname,
+      // reCAPTCHA config
+      GOOGLE_CAPTCHA_PUBLIC: googleCaptchaPublic,
+
       // S3 Bucket config
       ATTACHMENT_S3_BUCKET: s3Buckets.s3Attachment.bucketName,
       PAYMENT_PROOF_S3_BUCKET: s3Buckets.s3PaymentProof.bucketName,
@@ -235,6 +256,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
           SESSION_SECRET: sessionSecret,
           SES_USER: sesUserSecret,
           SES_PASS: sesPassSecret,
+          GOOGLE_CAPTCHA: googleCaptchaSecret,
         },
         logDriver: ecs.LogDriver.awsLogs({
           logGroup: new LogGroup(this, 'cloudwatch', {
