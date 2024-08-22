@@ -83,4 +83,6 @@ export default {
   POSTMAN_MOP_CAMPAIGN_ID: 'notused',
   POSTMAN_MOP_CAMPAIGN_API_KEY: 'notused',
   POSTMAN_BASE_URL: 'notused',
+
+  GROWTHBOOK_CLIENT_KEY: 'notused',
 }
