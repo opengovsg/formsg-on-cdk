@@ -16,7 +16,7 @@ import defaultEnvironment from './formsg-env-vars'
 import { LogGroup } from 'aws-cdk-lib/aws-logs'
 
 export class FormsgOnCdkStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, withHttps?: boolean, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props)
 
     // Input parameters
@@ -39,7 +39,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     const { valueAsString: email } = new cdk.CfnParameter(this, 'email', {
       type: 'String',
-      description: 'Your email address. OTP emails will be sent bearing this email address.',
+      description: 'OTP emails will be sent bearing this email address as the sender.',
     })
     const { valueAsString: initAgencyDomain } = new cdk.CfnParameter(this, 'initAgencyDomain', {
       type: 'String',

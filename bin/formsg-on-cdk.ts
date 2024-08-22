@@ -5,9 +5,7 @@ import { FormsgOnCdkStack } from '../lib/formsg-on-cdk-stack'
 
 const app = new cdk.App()
 
-const withHttps = process.env.WITH_HTTPS === 'true'
-
-new FormsgOnCdkStack(app, 'form', withHttps, {
+new FormsgOnCdkStack(app, 'form', {
   synthesizer: new cdk.DefaultStackSynthesizer({
     generateBootstrapVersionRule: false
   })
