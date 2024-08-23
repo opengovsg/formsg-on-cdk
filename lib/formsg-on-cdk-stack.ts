@@ -7,13 +7,14 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import { ApplicationLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
-import { AllowedMethods, CachePolicy, Distribution, OriginProtocolPolicy, OriginRequestPolicy } from 'aws-cdk-lib/aws-cloudfront'
+import { AllowedMethods, CachePolicy, Distribution, OriginProtocolPolicy, OriginRequestPolicy, ViewerProtocolPolicy } from 'aws-cdk-lib/aws-cloudfront'
 import { LoadBalancerV2Origin } from 'aws-cdk-lib/aws-cloudfront-origins'
 
 import { FormsgS3Buckets } from './constructs/s3'
 import { FormsgEcr } from './constructs/ecr'
 import defaultEnvironment from './formsg-env-vars'
 import { LogGroup } from 'aws-cdk-lib/aws-logs'
+import { OriginVerify } from '@alma-cdk/origin-verify'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -173,18 +174,26 @@ export class FormsgOnCdkStack extends cdk.Stack {
       },
     })
 
+    const originVerify = new OriginVerify(this, 'alb-verify', {
+      origin: loadBalancer,
+    })
     const origin = new LoadBalancerV2Origin(loadBalancer, {
       protocolPolicy: OriginProtocolPolicy.HTTP_ONLY,
       originShieldEnabled: true,
+      customHeaders: {
+        [originVerify.headerName]: originVerify.headerValue,
+      },
     })
     const cloudFront = new Distribution(this, 'cloudfront-form', {
       defaultBehavior: {
+        viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         origin,
         originRequestPolicy: OriginRequestPolicy.ALL_VIEWER,
         allowedMethods: AllowedMethods.ALLOW_ALL,
       },
     })
     cloudFront.addBehavior('api/*', origin, {
+      viewerProtocolPolicy: ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
       cachePolicy: CachePolicy.CACHING_DISABLED,
       originRequestPolicy: OriginRequestPolicy.ALL_VIEWER,
       allowedMethods: AllowedMethods.ALLOW_ALL,
