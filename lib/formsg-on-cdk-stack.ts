@@ -276,6 +276,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
         containerPort: 5000,
       },
       loadBalancer,
+      healthCheckGracePeriod: cdk.Duration.seconds(0),
     })
 
     const scaling = fargate.service.autoScaleTaskCount({ maxCapacity: 2 })
