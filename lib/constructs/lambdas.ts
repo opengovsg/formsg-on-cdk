@@ -48,7 +48,7 @@ export class FormsgLambdas extends Construct {
             's3:DeleteObject',
             's3:DeleteObjectVersion',
           ],
-          resources: [s3VirusScannerQuarantine.bucketArn],
+          resources: [`${s3VirusScannerQuarantine.bucketArn}/*`],
         }),
       ],
     }))
@@ -59,7 +59,7 @@ export class FormsgLambdas extends Construct {
             's3:PutObject',
             's3:PutObjectTagging',
           ],
-          resources: [s3VirusScannerClean.bucketArn],
+          resources: [`${s3VirusScannerClean.bucketArn}/*`],
         }),
       ],
     }))

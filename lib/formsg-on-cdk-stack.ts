@@ -15,6 +15,7 @@ import { FormsgEcr } from './constructs/ecr'
 import defaultEnvironment from './formsg-env-vars'
 import { LogGroup } from 'aws-cdk-lib/aws-logs'
 import { OriginVerify } from '@alma-cdk/origin-verify'
+import { VirusScannerEcs } from './constructs/virus-scanner-ecs'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -88,10 +89,6 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     // Create ECR
     const ecr = new FormsgEcr(this)
-
-    // Do not create Lambda Virus Scanner for now, until we figure out
-    // how to load the ECR image for this deployment
-    // const lambdas = new FormsgLambdas(this, { s3Buckets, ecr })
 
     // Create DocumentDB cluster
     const ddbPassSecret = new Secret(this, 'ddb-password', {
@@ -202,8 +199,8 @@ export class FormsgOnCdkStack extends cdk.Stack {
     const distributionUrl = `https://${cloudFront.distributionDomainName}`
 
     // Create S3 buckets
-    const s3SuffixSecret = new Secret(this, 's3-suffix-secret', {
-      secretName: 's3-suffix-secret',
+    const suffixSecret = new Secret(this, 'suffix-secret', {
+      secretName: 'suffix-secret',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       generateSecretString: {
         excludePunctuation: true,
@@ -213,8 +210,15 @@ export class FormsgOnCdkStack extends cdk.Stack {
       },
     })
 
-    const s3Suffix = s3SuffixSecret.secretValue.unsafeUnwrap()
+    const s3Suffix = suffixSecret.secretValue.unsafeUnwrap()
     const s3Buckets = new FormsgS3Buckets(this, { s3Suffix, origin: distributionUrl })
+
+    // Create ECS Cluster
+    const logGroupSuffix = s3Suffix
+    const cluster = new ecs.Cluster(this, 'ecs', { vpc })
+
+    // Hack together a virus scanner cluster in lieu of Lambda
+    const virusScanner = new VirusScannerEcs(this, { cluster, logGroupSuffix, s3Buckets })
 
     const environment = {
       ...defaultEnvironment,
@@ -238,6 +242,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
       STATIC_ASSETS_S3_BUCKET: s3Buckets.s3StaticAssets.bucketName,
       VIRUS_SCANNER_QUARANTINE_S3_BUCKET: s3Buckets.s3VirusScannerQuarantine.bucketName,
       VIRUS_SCANNER_CLEAN_S3_BUCKET: s3Buckets.s3VirusScannerClean.bucketName,
+      VIRUS_SCANNER_LAMBDA_ENDPOINT: `http://${virusScanner.hostname}`,
     }
 
     // Create Session Secret
@@ -252,9 +257,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
       })
     )
 
-    // Create ECS Cluster and Fargate Service
-    const logGroupSuffix = s3Suffix
-    const cluster = new ecs.Cluster(this, 'ecs', { vpc })
+    // Create Fargate Service
     const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'app', {
       cluster,
       taskImageOptions: {
@@ -303,7 +306,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
             's3:DeleteObject',
             's3:PutObjectAcl',
           ],
-          resources: [bucketArn],
+          resources: [`${bucketArn}/*`],
         })
       )
     )
@@ -314,7 +317,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
           's3:PutObject',
           's3:GetObject',
         ],
-        resources: [s3Buckets.s3PaymentProof.bucketArn],
+        resources: [`${s3Buckets.s3PaymentProof.bucketArn}/*`],
       })
     )
 
@@ -323,7 +326,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
         actions: [
           's3:PutObject',
         ],
-        resources: [s3Buckets.s3VirusScannerQuarantine.bucketArn],
+        resources: [`${s3Buckets.s3VirusScannerQuarantine.bucketArn}/*`],
       })
     )
 
@@ -332,7 +335,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
         actions: [
           's3:GetObjectVersion',
         ],
-        resources: [s3Buckets.s3VirusScannerClean.bucketArn],
+        resources: [`${s3Buckets.s3VirusScannerClean.bucketArn}/*`],
       })
     )
 

@@ -91,9 +91,21 @@ export class FormsgS3Buckets extends Construct {
       enforceSSL: true,
       removalPolicy: RemovalPolicy.DESTROY,
       versioned: true,
-      blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
-      objectOwnership: ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      objectOwnership: ObjectOwnership.OBJECT_WRITER,
+      blockPublicAccess: {
+        blockPublicAcls: false,
+        ignorePublicAcls: false,
+        blockPublicPolicy: false,
+        restrictPublicBuckets: false,
+      },
+      cors: [
+        {
+          allowedMethods: [HttpMethods.POST],
+          allowedOrigins: [origin],
+        }
+      ],
     })
+    this.s3VirusScannerQuarantine.grantPublicAccess('*', 's3:PutObject', 's3:PutObjectAcl')
 
     this.s3VirusScannerClean = new Bucket(this, `virus-scanner-clean`, {
       bucketName: `${envVars.VIRUS_SCANNER_CLEAN_S3_BUCKET}-${s3Suffix}`,
