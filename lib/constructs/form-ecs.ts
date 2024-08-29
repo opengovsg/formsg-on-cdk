@@ -1,14 +1,13 @@
-import { RemovalPolicy } from 'aws-cdk-lib'
-import { BlockPublicAccess, Bucket, BucketAccessControl, HttpMethods, ObjectOwnership } from 'aws-cdk-lib/aws-s3'
 import { Construct } from 'constructs'
-import envVars from '../formsg-env-vars'
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import { FormsgS3Buckets } from './s3';
 import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { LogGroup } from 'aws-cdk-lib/aws-logs';
+import { Duration } from 'aws-cdk-lib';
 
-export class VirusScannerEcs extends Construct {
+
+export class FormEcs extends Construct {
   readonly service: ecs.FargateService
   readonly hostname: string
 
@@ -18,40 +17,81 @@ export class VirusScannerEcs extends Construct {
       cluster, 
       logGroupSuffix, 
       s3Buckets,
+      environment,
+      secrets,
+      loadBalancer,
     } : { 
       cluster: ecs.Cluster; 
-      logGroupSuffix: string; 
-      s3Buckets: FormsgS3Buckets 
+      logGroupSuffix: string;
+      s3Buckets: FormsgS3Buckets;
+      environment: Record<string, string>;
+      secrets: Record<string, ecs.Secret>;
+      loadBalancer: ApplicationLoadBalancer
     }
   ) {
-    super(scope, 'virus-scanner')
-    const { vpc } = cluster
-
-    // Hack together a virus scanner cluster in lieu of Lambda
-    const port = 8080
-    const taskDefinition = new ecs.FargateTaskDefinition(this, 'task', {
-      memoryLimitMiB: 2048,
-      cpu: 1024,
-    })
+    super(scope, 'form')
+    const port = 5000
+    const taskDefinition = new ecs.FargateTaskDefinition(this, 'task')
     taskDefinition
       .addContainer('web', {
-        image: ecs.ContainerImage.fromRegistry('opengovsg/lambda-virus-scanner:latest-ecs'),
+        image: ecs.ContainerImage.fromRegistry('opengovsg/formsg-intl'),
         containerName: 'web',
-        environment: {
-          NODE_ENV: 'production',
-          VIRUS_SCANNER_QUARANTINE_S3_BUCKET: s3Buckets.s3VirusScannerQuarantine.bucketName,
-          VIRUS_SCANNER_CLEAN_S3_BUCKET: s3Buckets.s3VirusScannerClean.bucketName,
-        },
+        environment,
+        secrets,
         logging: ecs.LogDriver.awsLogs({
           logGroup: new LogGroup(this, 'cloudwatch', {
-            logGroupName: `/aws/ecs/logs/virus-scanner/${logGroupSuffix}`,
+            logGroupName: `/aws/ecs/logs/form/${logGroupSuffix}`,
           }),
-          streamPrefix: 'virus-scanner',
+          streamPrefix: 'form',
         }),
         portMappings: [
           { containerPort: port, hostPort: port },
         ],
       })
+      taskDefinition.addToTaskRolePolicy(
+        new PolicyStatement({
+          actions: [
+            's3:PutObject',
+            's3:GetObject',
+            's3:DeleteObject',
+            's3:PutObjectAcl',
+          ],
+          resources: [
+            s3Buckets.s3Attachment,
+            s3Buckets.s3Image,
+            s3Buckets.s3Logo,
+          ].map(({ bucketArn }) => `${bucketArn}/*`),
+        })
+      )
+
+    taskDefinition.addToTaskRolePolicy(
+      new PolicyStatement({
+        actions: [
+          's3:PutObject',
+          's3:GetObject',
+        ],
+        resources: [`${s3Buckets.s3PaymentProof.bucketArn}/*`],
+      })
+    )
+
+    taskDefinition.addToTaskRolePolicy(
+      new PolicyStatement({
+        actions: [
+          's3:PutObject',
+        ],
+        resources: [`${s3Buckets.s3VirusScannerQuarantine.bucketArn}/*`],
+      })
+    )
+
+    taskDefinition.addToTaskRolePolicy(
+      new PolicyStatement({
+        actions: [
+          's3:GetObjectVersion',
+        ],
+        resources: [`${s3Buckets.s3VirusScannerClean.bucketArn}/*`],
+      })
+    )
+
     taskDefinition.addToTaskRolePolicy(
       new PolicyStatement({
         actions: [
@@ -79,17 +119,16 @@ export class VirusScannerEcs extends Construct {
       taskDefinition,
     })
 
-    const loadBalancer = new ApplicationLoadBalancer(this, 'alb', {
-      loadBalancerName: 'alb',
-      internetFacing: false,
-      vpc,
-      vpcSubnets: {
-        subnets: vpc.privateSubnets,
-      },
-    })
     const listener = loadBalancer.addListener('alb-listener', {
       port: 80,
       protocol: ApplicationProtocol.HTTP,
+    })
+
+    const scaling = service.autoScaleTaskCount({ maxCapacity: 2 })
+    scaling.scaleOnCpuUtilization('scaling', {
+      targetUtilizationPercent: 50,
+      scaleInCooldown: Duration.seconds(60),
+      scaleOutCooldown: Duration.seconds(60),
     })
 
     service.registerLoadBalancerTargets({
@@ -101,7 +140,7 @@ export class VirusScannerEcs extends Construct {
           protocol: ApplicationProtocol.HTTP,
           port,
           healthCheck: {
-            healthyHttpCodes: ['200', '404'].join(',')
+            healthyHttpCodes: ['200', '403'].join(',')
           }
         },
       ),
@@ -109,6 +148,5 @@ export class VirusScannerEcs extends Construct {
     })
 
     this.service = service
-    this.hostname = loadBalancer.loadBalancerDnsName
   }
 }

@@ -2,20 +2,18 @@ import * as cdk from 'aws-cdk-lib'
 import { Construct } from 'constructs'
 
 import * as ecs from 'aws-cdk-lib/aws-ecs'
-import * as ecsPatterns from 'aws-cdk-lib/aws-ecs-patterns'
 import * as ec2 from 'aws-cdk-lib/aws-ec2'
 import { ApplicationLoadBalancer } from 'aws-cdk-lib/aws-elasticloadbalancingv2'
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager'
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
 import { AllowedMethods, CachePolicy, Distribution, OriginProtocolPolicy, OriginRequestPolicy, ViewerProtocolPolicy } from 'aws-cdk-lib/aws-cloudfront'
 import { LoadBalancerV2Origin } from 'aws-cdk-lib/aws-cloudfront-origins'
 
 import { FormsgS3Buckets } from './constructs/s3'
 import { FormsgEcr } from './constructs/ecr'
-import defaultEnvironment from './formsg-env-vars'
-import { LogGroup } from 'aws-cdk-lib/aws-logs'
+import defaultEnvironment from './formsg-env-vars';
 import { OriginVerify } from '@alma-cdk/origin-verify'
 import { VirusScannerEcs } from './constructs/virus-scanner-ecs'
+import { FormEcs } from './constructs/form-ecs'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -210,6 +208,18 @@ export class FormsgOnCdkStack extends cdk.Stack {
       },
     })
 
+    // Create Session Secret
+    const sessionSecret = ecs.Secret.fromSecretsManager(
+      new Secret(this, 'session-secret', {
+        secretName: 'session-secret',
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        generateSecretString: {
+          excludePunctuation: true,
+          excludeCharacters: "/¥'%:{}",
+        },
+      })
+    )
+
     const s3Suffix = suffixSecret.secretValue.unsafeUnwrap()
     const s3Buckets = new FormsgS3Buckets(this, { s3Suffix, origin: distributionUrl })
 
@@ -245,99 +255,27 @@ export class FormsgOnCdkStack extends cdk.Stack {
       VIRUS_SCANNER_LAMBDA_ENDPOINT: `http://${virusScanner.hostname}`,
     }
 
-    // Create Session Secret
-    const sessionSecret = ecs.Secret.fromSecretsManager(
-      new Secret(this, 'session-secret', {
-        secretName: 'session-secret',
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        generateSecretString: {
-          excludePunctuation: true,
-          excludeCharacters: "/¥'%:{}",
-        },
-      })
-    )
+    const secrets = {
+      DB_HOST: dbHostString,
+      SESSION_SECRET: sessionSecret,
+      SES_USER: sesUserSecret,
+      SES_PASS: sesPassSecret,
+      GOOGLE_CAPTCHA: googleCaptchaSecret,
+    }
 
-    // Create Fargate Service
-    const fargate = new ecsPatterns.ApplicationLoadBalancedFargateService(this, 'app', {
+    const form = new FormEcs(this, { 
       cluster,
-      taskImageOptions: {
-        image: ecs.ContainerImage.fromRegistry('opengovsg/formsg-intl'),
-        environment,
-        secrets: {
-          DB_HOST: dbHostString,
-          SESSION_SECRET: sessionSecret,
-          SES_USER: sesUserSecret,
-          SES_PASS: sesPassSecret,
-          GOOGLE_CAPTCHA: googleCaptchaSecret,
-        },
-        logDriver: ecs.LogDriver.awsLogs({
-          logGroup: new LogGroup(this, 'cloudwatch', {
-            logGroupName: `/aws/ecs/logs/form/${logGroupSuffix}`,
-          }),
-          streamPrefix: 'form',
-        }),
-        containerPort: 5000,
-      },
+      logGroupSuffix,
+      s3Buckets,
+      environment,
+      secrets,
       loadBalancer,
-      healthCheckGracePeriod: cdk.Duration.seconds(0),
     })
 
-    const scaling = fargate.service.autoScaleTaskCount({ maxCapacity: 2 })
-    scaling.scaleOnCpuUtilization('scaling', {
-      targetUtilizationPercent: 50,
-      scaleInCooldown: cdk.Duration.seconds(60),
-      scaleOutCooldown: cdk.Duration.seconds(60),
-    })
 
-    fargate.service.connections.securityGroups.forEach((securityGroup) => {
+    form.service.connections.securityGroups.forEach((securityGroup) => {
       dbSecurityGroup.addIngressRule(securityGroup, ec2.Port.tcp(27017))
     })
-
-    ;[
-      s3Buckets.s3Attachment,
-      s3Buckets.s3Image,
-      s3Buckets.s3Logo,
-    ].forEach(({ bucketArn }) => 
-      fargate.taskDefinition.addToTaskRolePolicy(
-        new PolicyStatement({
-          actions: [
-            's3:PutObject',
-            's3:GetObject',
-            's3:DeleteObject',
-            's3:PutObjectAcl',
-          ],
-          resources: [`${bucketArn}/*`],
-        })
-      )
-    )
-
-    fargate.taskDefinition.addToTaskRolePolicy(
-      new PolicyStatement({
-        actions: [
-          's3:PutObject',
-          's3:GetObject',
-        ],
-        resources: [`${s3Buckets.s3PaymentProof.bucketArn}/*`],
-      })
-    )
-
-    fargate.taskDefinition.addToTaskRolePolicy(
-      new PolicyStatement({
-        actions: [
-          's3:PutObject',
-        ],
-        resources: [`${s3Buckets.s3VirusScannerQuarantine.bucketArn}/*`],
-      })
-    )
-
-    fargate.taskDefinition.addToTaskRolePolicy(
-      new PolicyStatement({
-        actions: [
-          's3:GetObjectVersion',
-        ],
-        resources: [`${s3Buckets.s3VirusScannerClean.bucketArn}/*`],
-      })
-    )
 
     new cdk.CfnOutput(this, 'url', { value: cloudFront.distributionDomainName })
   }
