@@ -55,22 +55,22 @@ export class FormsgOnCdkStack extends cdk.Stack {
     })
 
 
-    const { valueAsString: sesHost } = new cdk.CfnParameter(this, 'sesHost', {
+    const { valueAsString: sesHost } = new cdk.CfnParameter(this, 'emailHost', {
       type: 'String',
       default: 'email-smtp.ap-southeast-1.amazonaws.com',
       description: 'The fully-qualified domain name (FQDN) of the SMTP host, or for Simple Email Service (SES).',
     })
-    const { valueAsString: sesPort } = new cdk.CfnParameter(this, 'sesPort', {
+    const { valueAsString: sesPort } = new cdk.CfnParameter(this, 'emailPort', {
       type: 'Number',
       default: 465,
       description: 'The port for the SMTP host or Simple Email Service (SES).',
     })
-    const { valueAsString: sesUser } = new cdk.CfnParameter(this, 'sesUser', {
+    const { valueAsString: sesUser } = new cdk.CfnParameter(this, 'emailUser', {
       noEcho: true,
       type: 'String',
       description: 'The SMTP user for Simple Email Service (SES).',
     })
-    const { valueAsString: sesPass } = new cdk.CfnParameter(this, 'sesPass', {
+    const { valueAsString: sesPass } = new cdk.CfnParameter(this, 'emailPass', {
       noEcho: true,
       type: 'String',
       description: 'The SMTP password for Simple Email Service (SES).',
