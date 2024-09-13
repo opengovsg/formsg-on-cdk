@@ -117,6 +117,7 @@ export class FormEcs extends Construct {
     const service = new ecs.FargateService(this, 'service', {
       cluster,
       taskDefinition,
+      healthCheckGracePeriod: Duration.seconds(120),
     })
 
     const listener = loadBalancer.addListener('alb-listener', {
@@ -140,8 +141,8 @@ export class FormEcs extends Construct {
           protocol: ApplicationProtocol.HTTP,
           port,
           healthCheck: {
-            healthyHttpCodes: ['200', '403'].join(',')
-          }
+            healthyHttpCodes: ['200', '403'].join(','),
+          },
         },
       ),
       newTargetGroupId: 'ecs',
