@@ -117,7 +117,7 @@ export class FormEcs extends Construct {
     const service = new ecs.FargateService(this, 'service', {
       cluster,
       taskDefinition,
-      healthCheckGracePeriod: Duration.seconds(120),
+      healthCheckGracePeriod: Duration.seconds(300),
     })
 
     const listener = loadBalancer.addListener('alb-listener', {
