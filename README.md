@@ -4,6 +4,15 @@ This repository contains templates to roll out FormSG onto an AWS account.
 
 It is written using AWS' Cloud Development Kit (CDK).
 
+## Usage
+
+This repository's most significant artifact is a CloudFormation template,
+accessible via this project's [releases](./releases), and via the Go.gov.sg 
+link found on the GitHub page.
+
+More information about using the CloudFormation template can be found on the
+[wiki](./wiki).
+
 ## Project details
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
