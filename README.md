@@ -7,11 +7,12 @@ It is written using AWS' Cloud Development Kit (CDK).
 ## Usage
 
 This repository's most significant artifact is a CloudFormation template,
-accessible via this project's [releases](./releases), and via the Go.gov.sg 
-link found on the GitHub page.
+accessible via this project's 
+[releases](https://github.com/opengovsg/formsg-on-cdk/releases), 
+and via the Go.gov.sg link found on the GitHub page.
 
 More information about using the CloudFormation template can be found on the
-[wiki](./wiki).
+[wiki](https://github.com/opengovsg/formsg-on-cdk/wiki).
 
 ## Project details
 
