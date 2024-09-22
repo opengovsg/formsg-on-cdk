@@ -54,7 +54,6 @@ export class FormsgOnCdkStack extends cdk.Stack {
       description: 'The shortname of the initial agency.',
     })
 
-
     const { valueAsString: sesHost } = new cdk.CfnParameter(this, 'emailHost', {
       type: 'String',
       default: 'email-smtp.ap-southeast-1.amazonaws.com',
@@ -113,7 +112,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
       // providing 750 machine hours free per month
       // See https://aws.amazon.com/documentdb/free-trial/
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MEDIUM),
-      instances: 2,
+      instances: 1,
       engineVersion: '4.0',
       parameterGroup: new cdk.aws_docdb.ClusterParameterGroup(this, 'ddb-parameter-group', {
         dbClusterParameterGroupName: 'disabled-tls-parameter2',
