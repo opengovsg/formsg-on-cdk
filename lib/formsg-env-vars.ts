@@ -85,4 +85,5 @@ export default {
   POSTMAN_BASE_URL: 'notused',
 
   GROWTHBOOK_CLIENT_KEY: 'notused',
+  SES_CONFIG_SET: 'notused',
 }
