@@ -1,8 +1,9 @@
 import { Construct } from 'constructs'
-import * as ecrdeploy from 'cdk-ecr-deployment'
+import * as ecrdeploy from './cdk-ecr-deployment'
 import { Repository } from 'aws-cdk-lib/aws-ecr'
-import * as ecr from 'aws-cdk-lib/aws-ecr-assets'
-import { RemovalPolicy } from 'aws-cdk-lib'
+import { RemovalPolicy, Stack } from 'aws-cdk-lib'
+import { Code } from 'aws-cdk-lib/aws-lambda'
+import { Bucket } from 'aws-cdk-lib/aws-s3'
 
 export interface FormsgEcrProps {
 }
@@ -15,6 +16,8 @@ export class FormsgEcr extends Construct {
     repository: Repository
   }
 
+  readonly deployment: ecrdeploy.ECRDeployment
+
   constructor(
     scope: Construct, 
     props: FormsgEcrProps = {}
@@ -24,10 +27,14 @@ export class FormsgEcr extends Construct {
       repositoryName: 'lambda-virus-scanner',
       removalPolicy: RemovalPolicy.DESTROY,
     })
-    // new ecrdeploy.ECRDeployment(scope, 'ecr-deployment-lambda-virus-scanner', {
-    //   src: new ecrdeploy.DockerImageName('opengovsg/lambda-virus-scanner:latest'),
-    //   dest: new ecrdeploy.DockerImageName(this.lambdaVirusScanner.repositoryUriForTag('latest')),
-    // })
+    this.deployment = new ecrdeploy.ECRDeployment(scope, 'ecr-deployment-lambda-virus-scanner', {
+      code: Code.fromBucket(Bucket.fromBucketAttributes(this, 'cdk-ecr-deployment', {
+        bucketArn: 'arn:aws:s3:::formsg-on-cdk',
+        bucketRegionalDomainName: `formsg-on-cdk.s3.ap-southeast-1.${Stack.of(this).urlSuffix}`
+      }), 'cdk-ecr-deployment/bootstrap.zip'),
+      src: new ecrdeploy.DockerImageName('opengovsg/lambda-virus-scanner:latest'),
+      dest: new ecrdeploy.DockerImageName(repositoryLambdaVirusScanner.repositoryUriForTag('latest')),
+    })
     this.lambdaVirusScanner = {
       repository: repositoryLambdaVirusScanner,
     }

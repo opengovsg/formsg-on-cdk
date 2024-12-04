@@ -1,5 +1,7 @@
 
-import { Duration } from 'aws-cdk-lib'
+import { Duration, RemovalPolicy } from 'aws-cdk-lib'
+import { Rule, Schedule } from 'aws-cdk-lib/aws-events'
+import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets'
 import { Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam'
 import { Code, Function, Handler, Runtime } from 'aws-cdk-lib/aws-lambda'
 import { Construct } from 'constructs'
@@ -22,14 +24,15 @@ export class FormsgLambdas extends Construct {
       },
       ecr: {
         lambdaVirusScanner,
+        deployment,
       }
     }: FormsgLambdasProps
   ) {
     super(scope, 'lambdas')
-    const virusScanner = new Function(scope, 'virus-scanner', {
+    const virusScanner = new Function(this, 'virus-scanner', {
       functionName: 'virus-scanner',
       timeout: Duration.seconds(300),
-      memorySize: 2048,
+      memorySize: 1536,
       runtime: Runtime.FROM_IMAGE,
       handler: Handler.FROM_IMAGE,
       code: Code.fromEcrImage(lambdaVirusScanner.repository),
@@ -38,7 +41,7 @@ export class FormsgLambdas extends Construct {
         VIRUS_SCANNER_CLEAN_S3_BUCKET: s3VirusScannerClean.bucketName,
       }
     })
-    virusScanner.role?.attachInlinePolicy(new Policy(scope, 'manage-quarantine', {
+    virusScanner.role?.attachInlinePolicy(new Policy(this, 'manage-quarantine', {
       statements: [
         new PolicyStatement({
           actions: [
@@ -52,7 +55,7 @@ export class FormsgLambdas extends Construct {
         }),
       ],
     }))
-    virusScanner.role?.attachInlinePolicy(new Policy(scope, 'put-clean', {
+    virusScanner.role?.attachInlinePolicy(new Policy(this, 'put-clean', {
       statements: [
         new PolicyStatement({
           actions: [
@@ -63,7 +66,16 @@ export class FormsgLambdas extends Construct {
         }),
       ],
     }))
+    virusScanner.node.addDependency(deployment.customResource)
     this.virusScanner = virusScanner
+
+
+    // Trigger the virus scanner once every 3 minutes to keep it warm
+    const eventRule = new Rule(this, 'keep-warm-trigger', {
+      schedule: Schedule.rate(Duration.minutes(3)), 
+    })
+    eventRule.applyRemovalPolicy(RemovalPolicy.DESTROY)
+    eventRule.addTarget(new LambdaFunction(this.virusScanner))
   }
 
 }

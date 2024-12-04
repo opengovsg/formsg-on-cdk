@@ -12,8 +12,8 @@ import { FormsgS3Buckets } from './constructs/s3'
 import { FormsgEcr } from './constructs/ecr'
 import defaultEnvironment from './formsg-env-vars';
 import { OriginVerify } from '@alma-cdk/origin-verify'
-import { VirusScannerEcs } from './constructs/virus-scanner-ecs'
 import { FormEcs } from './constructs/form-ecs'
+import { FormsgLambdas } from './constructs/lambdas'
 
 export class FormsgOnCdkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -56,7 +56,6 @@ export class FormsgOnCdkStack extends cdk.Stack {
 
     const { valueAsString: sesHost } = new cdk.CfnParameter(this, 'emailHost', {
       type: 'String',
-      default: 'email-smtp.ap-southeast-1.amazonaws.com',
       description: 'The fully-qualified domain name (FQDN) of the SMTP host, or for Simple Email Service (SES).',
     })
     const { valueAsString: sesPort } = new cdk.CfnParameter(this, 'emailPort', {
@@ -226,8 +225,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
     const logGroupSuffix = s3Suffix
     const cluster = new ecs.Cluster(this, 'ecs', { vpc })
 
-    // Hack together a virus scanner cluster in lieu of Lambda
-    const virusScanner = new VirusScannerEcs(this, { cluster, logGroupSuffix, s3Buckets })
+    const lambdas = new FormsgLambdas(this, { s3Buckets, ecr })
 
     const environment = {
       ...defaultEnvironment,
@@ -251,7 +249,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
       STATIC_ASSETS_S3_BUCKET: s3Buckets.s3StaticAssets.bucketName,
       VIRUS_SCANNER_QUARANTINE_S3_BUCKET: s3Buckets.s3VirusScannerQuarantine.bucketName,
       VIRUS_SCANNER_CLEAN_S3_BUCKET: s3Buckets.s3VirusScannerClean.bucketName,
-      VIRUS_SCANNER_LAMBDA_ENDPOINT: `http://${virusScanner.hostname}`,
+      VIRUS_SCANNER_LAMBDA_FUNCTION_NAME: lambdas.virusScanner.functionName,
     }
 
     const secrets = {
@@ -269,6 +267,7 @@ export class FormsgOnCdkStack extends cdk.Stack {
       environment,
       secrets,
       loadBalancer,
+      lambdas,
     })
 
 

@@ -17,6 +17,13 @@ export class FormsgS3Buckets extends Construct {
   ) {
     super(scope, 's3')
 
+    const cors = [
+      {
+        allowedMethods: [HttpMethods.GET, HttpMethods.POST],
+        allowedOrigins: [origin],
+      }
+    ]
+
     this.s3Attachment = new Bucket(this, `attachment`, {
       bucketName: `${envVars.ATTACHMENT_S3_BUCKET}-${s3Suffix}`,
       enforceSSL: true,
@@ -24,6 +31,7 @@ export class FormsgS3Buckets extends Construct {
       versioned: true,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
       objectOwnership: ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      cors,
     })
 
     this.s3PaymentProof = new Bucket(this, `payment-proof`, {
@@ -32,14 +40,8 @@ export class FormsgS3Buckets extends Construct {
       removalPolicy: RemovalPolicy.DESTROY,
       versioned: true,
       objectOwnership: ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      cors,
     })
-
-    const cors = [
-      {
-        allowedMethods: [HttpMethods.GET, HttpMethods.POST],
-        allowedOrigins: [origin],
-      }
-    ]
 
     this.s3Image = new Bucket(this, `image`, {
       bucketName: `${envVars.IMAGE_S3_BUCKET}-${s3Suffix}`,

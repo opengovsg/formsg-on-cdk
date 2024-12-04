@@ -1,10 +1,11 @@
 import { Construct } from 'constructs'
 import * as ecs from 'aws-cdk-lib/aws-ecs';
-import { FormsgS3Buckets } from './s3';
 import { ApplicationLoadBalancer, ApplicationProtocol } from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { LogGroup } from 'aws-cdk-lib/aws-logs';
 import { Duration } from 'aws-cdk-lib';
+import { type FormsgS3Buckets } from './s3';
+import { type FormsgLambdas } from './lambdas';
 
 
 export class FormEcs extends Construct {
@@ -20,6 +21,7 @@ export class FormEcs extends Construct {
       environment,
       secrets,
       loadBalancer,
+      lambdas,
     } : { 
       cluster: ecs.Cluster; 
       logGroupSuffix: string;
@@ -27,6 +29,7 @@ export class FormEcs extends Construct {
       environment: Record<string, string>;
       secrets: Record<string, ecs.Secret>;
       loadBalancer: ApplicationLoadBalancer
+      lambdas: FormsgLambdas
     }
   ) {
     super(scope, 'form')
@@ -113,6 +116,8 @@ export class FormEcs extends Construct {
         resources: [`${s3Buckets.s3VirusScannerClean.bucketArn}/*`],
       })
     )
+
+    lambdas.virusScanner.grantInvoke(taskDefinition.taskRole)
 
     const service = new ecs.FargateService(this, 'service', {
       cluster,
