@@ -1,6 +1,6 @@
 {
   "name": "formsg-on-cdk",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "bin": {
     "formsg-on-cdk": "bin/formsg-on-cdk.js"
   },
