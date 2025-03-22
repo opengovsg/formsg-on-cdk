@@ -10,6 +10,7 @@ export default {
   IMAGE_S3_BUCKET: 'form-image-bucket',
   LOGO_S3_BUCKET: 'form-logo-bucket',
   STATIC_ASSETS_S3_BUCKET: 'form-static-assets-bucket',
+  GUARDDUTY_QUARANTINE_S3_BUCKET: 'form-virus-scanner-quarantine-bucket',
   VIRUS_SCANNER_QUARANTINE_S3_BUCKET: 'form-virus-scanner-quarantine-bucket',
   VIRUS_SCANNER_CLEAN_S3_BUCKET: 'form-virus-scanner-clean-bucket',
   FORMSG_SDK_MODE: 'development',
